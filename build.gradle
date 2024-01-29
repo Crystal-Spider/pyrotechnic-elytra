@@ -1,10 +1,16 @@
 plugins {
   // Required for NeoGradle
   id "org.jetbrains.gradle.plugin.idea-ext" version "1.1.7"
+  id "com.modrinth.minotaur" version "2.+" apply false
+  id "com.matthewprenger.cursegradle" version "1.4.+" apply false
+  id "com.github.breadmoirai.github-release" version "2.4.+" apply false
 }
 
-subprojects {
+subprojects { subproject ->
   apply plugin: "java"
+  apply plugin: "com.modrinth.minotaur"
+  apply plugin: "com.matthewprenger.cursegradle"
+  apply plugin: "com.github.breadmoirai.github-release"
 
   java.toolchain.languageVersion = JavaLanguageVersion.of(17)
   java.withSourcesJar()
@@ -17,12 +23,12 @@ subprojects {
     manifest {
       attributes([
         'Specification-Title'     : mod_title,
-        'Specification-Vendor'    : mod_author,
-        'Specification-Version'   : project.jar.archiveVersion,
+        'Specification-Vendor'    : mod_authors,
+        'Specification-Version'   : "${minecraft_version}-${mod_version}",
         'Implementation-Title'    : mod_title,
-        'Implementation-Vendor'   : mod_author,
-        'Implementation-Version'  : project.jar.archiveVersion,
-        "Implementation-URL"      : "https://github.com/${github_user}/${mod_id.replaceAll('_', '-')}/tree/${minecraft_version}",
+        'Implementation-Vendor'   : mod_authors,
+        'Implementation-Version'  : "${minecraft_version}-${mod_version}",
+        "Implementation-URL"      : "https://github.com/${github_user}/${mod_id_kebab}/tree/${minecraft_version}",
         'Implementation-Timestamp': new Date().format("yyyy-MM-dd'T'HH:mm:ssZ"),
         'Timestamp'               : System.currentTimeMillis(),
         'Built-On-Java'           : "${System.getProperty('java.vm.version')} (${System.getProperty('java.vm.vendor')})",
@@ -54,10 +60,10 @@ subprojects {
     def expandProps = [
       "mod_version"                  : mod_version,
       "group"                        : project.group,
-      "mod_author"                   : mod_author,
+      "mod_authors"                   : mod_authors,
       "mod_title"                    : mod_title,
       "mod_id"                       : mod_id,
-      "mod_id_kebab"                 : mod_id.replaceAll("_", "-"),
+      "mod_id_kebab"                 : mod_id_kebab,
       "license"                      : license,
       "description"                  : project.description,
       "credits"                      : credits,
@@ -81,5 +87,120 @@ subprojects {
 
   tasks.withType(GenerateModuleMetadata).configureEach {
     enabled = false
+  }
+
+  def changelog_body = "See [Changelog](https://github.com/${github_user}/${mod_id_kebab}/blob/master/CHANGELOG.md#${minecraft_version.replaceAll('\\.', '')}-${mod_version.replaceAll('\\.', '')}---${new Date().format("yyyyMMdd")})."
+
+  if (file("../api-keys.properties").exists()) {
+    file("../api-keys.properties").withReader {
+      Properties props = new Properties()
+      props.load(it)
+      api_keys = props
+    }
+  } else {
+    logger.warn("Missing api-keys.properties file in the project root, publishing won't be possible")
+    api_keys = [
+      github: "",
+      modrinth: "",
+      curseforge: ""
+    ]
+  }
+
+  def loader = "common"
+  switch (subproject.name) {
+    case "fabric":
+      loader = "Fabric"
+      break
+    case "forge":
+      loader = "Forge"
+      break
+    case "neoforge":
+      loader = "NeoForge"
+      break
+  }
+  def noPublish = loader == "common"
+
+  githubRelease {
+    token api_keys.github
+    owner github_user
+    repo mod_id_kebab
+    tagName "v${minecraft_version}-${mod_version}"
+    targetCommitish minecraft_version
+    releaseName "v${minecraft_version}-${mod_version}"
+    generateReleaseNotes false
+    body changelog_body
+    draft false
+    prerelease false
+    releaseAssets jar
+    allowUploadToExisting true
+    overwrite false
+    dryRun noPublish
+  }
+
+  modrinth {
+    token = api_keys.modrinth
+    projectId = mod_id_kebab
+    versionNumber = mod_version
+    versionName = "[${loader} - ${minecraft_version}] ${mod_title} v${mod_version}"
+    changelog = changelog_body
+    uploadFile = jar
+    versionType = "release"
+    gameVersions = [minecraft_version]
+    loaders = [loader.toLowerCase()]
+    dependencies {
+      switch (loader) {
+        case "Fabric":
+          required.project "fabric-api"
+          break
+        case "Forge":
+          break
+        case "NeoForge":
+          break
+      }
+    }
+    debugMode = noPublish
+  }
+
+  curseforge {
+    apiKey = api_keys.curseforge
+    project {
+      id = curseforge_id
+      changelogType = "markdown"
+      changelog = changelog_body
+      releaseType = "release"
+      if (!noPublish) {
+        addGameVersion loader
+      }
+      addGameVersion minecraft_version
+      mainArtifact(jar) {
+        displayName = "[${loader} - ${minecraft_version}] ${mod_title} v${mod_version}"
+        switch (loader) {
+          case "Fabric":
+            relations {
+              requiredDependency "fabric-api"
+            }
+            break
+          case "Forge":
+            break
+          case "NeoForge":
+            break
+        }
+      }
+    }
+    options {
+      debug = noPublish
+      detectNewerJava = true
+      forgeGradleIntegration = false
+    }
+  }
+
+  tasks.register('publish') {
+    group = "publishing"
+    description = "Publish all loader specific versions to all platforms"
+    dependsOn 'githubRelease'
+    dependsOn 'modrinth'
+    dependsOn 'curseforge'
+    tasks.findByName('modrinth').mustRunAfter 'githubRelease'
+    tasks.findByName('curseforge').mustRunAfter 'modrinth'
   }
 }

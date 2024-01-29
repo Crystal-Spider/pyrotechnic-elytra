@@ -3,6 +3,9 @@ package crystalspider.pyrotechnic_elytra.platform;
 import crystalspider.pyrotechnic_elytra.platform.services.IPlatformHelper;
 import net.fabricmc.loader.api.FabricLoader;
 
+/**
+ * Fabric platform helper.
+ */
 public class FabricPlatformHelper implements IPlatformHelper {
   @Override
   public String getPlatformName() {

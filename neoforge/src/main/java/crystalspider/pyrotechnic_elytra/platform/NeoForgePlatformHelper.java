@@ -4,6 +4,9 @@ import crystalspider.pyrotechnic_elytra.platform.services.IPlatformHelper;
 import net.neoforged.fml.ModList;
 import net.neoforged.fml.loading.FMLLoader;
 
+/**
+ * NeoForge platform helper.
+ */
 public class NeoForgePlatformHelper implements IPlatformHelper {
   @Override
   public String getPlatformName() {

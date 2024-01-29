@@ -10,7 +10,7 @@ issueTrackerURL="https://github.com/${github_user}/${mod_id_kebab}/issues" #opti
   displayURL = "https://github.com/${github_user}/${mod_id_kebab}/tree/${minecraft_version}" #optional (displayed in the mod UI)
   logoFile = "${mod_id}.png" #optional
   credits = "${credits}" #optional
-  authors = "${mod_author}" #optional
+  authors = "${mod_authors}" #optional
   description = '''${description}''' #mandatory (Supports multiline text)
 [[dependencies.${mod_id}]] #optional
   modId = "forge" #mandatory
